@@ -45,6 +45,7 @@ import {
   FolderIcon,
   FolderPlusIcon,
   LinkIcon,
+  LoaderCircleIcon,
   MessageSquareIcon,
   PaletteIcon,
   SettingsIcon,
@@ -2577,9 +2578,11 @@ function OpenCommandPaletteDialog(props: {
                   hasHighlightedBrowseItem,
                 })
               : undefined,
-        wrapperClassName: isSubmenu
-          ? "[&_[data-slot=autocomplete-start-addon]]:pointer-events-auto"
-          : undefined,
+        wrapperClassName: isRemoteProjectCloning
+          ? "hidden"
+          : isSubmenu
+            ? "[&_[data-slot=autocomplete-start-addon]]:pointer-events-auto"
+            : undefined,
         ...(isSubmenu
           ? {
               startAddon: (
@@ -2609,7 +2612,7 @@ function OpenCommandPaletteDialog(props: {
       showBackHint={isSubmenu}
       value={query}
     >
-      {remoteProjectContext ? (
+      {remoteProjectContext && !isRemoteProjectCloning ? (
         <div className="p-2 pb-0">
           <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Repository</div>
           <div className="flex min-h-8 items-center gap-2 rounded-sm px-2 py-1.5">
@@ -2624,24 +2627,41 @@ function OpenCommandPaletteDialog(props: {
         </div>
       ) : null}
       {isRemoteProjectCloning && cloneProgress ? (
-        <div
-          className="mx-2 mt-2 mb-1 rounded-md border border-border/60 bg-muted/20 px-3 py-3"
-          role="status"
-          aria-live="polite"
-        >
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <span className="font-medium text-foreground text-sm">Cloning project</span>
-            <span className="text-muted-foreground text-xs tabular-nums">
-              {cloneProgress.percent === null ? "" : `${cloneProgress.percent}%`}
+        <div className="px-4 pb-4 pt-4" role="status" aria-live="polite">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-foreground/[0.06] text-muted-foreground">
+                {remoteProjectContext?.icon}
+              </span>
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate font-medium text-foreground text-sm">
+                  {remoteProjectContext?.title ?? "Repository"}
+                </span>
+                <span className="truncate text-muted-foreground/75 text-xs">
+                  {query || "Preparing destination"}
+                </span>
+              </span>
+            </div>
+            <span className="shrink-0 rounded-full bg-foreground/[0.06] px-2 py-1 font-medium text-muted-foreground text-[11px] tabular-nums">
+              Cloning{cloneProgress.percent === null ? "" : ` ${cloneProgress.percent}%`}
             </span>
           </div>
-          <div className="mb-2 text-muted-foreground text-xs">{cloneProgress.detail}</div>
+          <div className="mt-5 flex items-center gap-2 text-xs">
+            <LoaderCircleIcon className="size-3.5 shrink-0 animate-spin text-primary motion-reduce:animate-none" />
+            <span className="min-w-0 flex-1 truncate font-medium text-foreground">
+              {cloneProgress.detail}
+            </span>
+            <span className="shrink-0 text-muted-foreground tabular-nums">
+              {cloneProgress.percent === null ? "—" : `${cloneProgress.percent}%`}
+            </span>
+          </div>
           <div
-            className="h-1.5 w-full overflow-hidden rounded-full bg-muted/60"
+            className="mt-2 h-1 w-full overflow-hidden rounded-full bg-foreground/[0.08]"
             role="progressbar"
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={cloneProgress.percent ?? undefined}
+            aria-valuetext={cloneProgress.detail}
             aria-label="Clone progress"
           >
             <div
@@ -2653,6 +2673,10 @@ function OpenCommandPaletteDialog(props: {
                 cloneProgress.percent === null ? undefined : { width: `${cloneProgress.percent}%` }
               }
             />
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-muted-foreground/65">
+            <span className="min-w-0 truncate">{remoteProjectContext?.description}</span>
+            <span className="shrink-0">{cloneProgress.phase.replace("_", " ")}</span>
           </div>
         </div>
       ) : null}
