@@ -2678,8 +2678,7 @@ function OpenCommandPaletteDialog(props: {
               }
             />
           </div>
-          <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-muted-foreground/65">
-            <span className="min-w-0 truncate">{remoteProjectContext?.description}</span>
+          <div className="mt-2 flex items-center justify-end gap-3 text-[11px] text-muted-foreground/65">
             <span className="shrink-0">{cloneProgress.phase.replace("_", " ")}</span>
           </div>
         </div>
