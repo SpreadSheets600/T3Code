@@ -2086,7 +2086,9 @@ function OpenCommandPaletteDialog(props: {
         onProgress: (event) => {
           if (event.kind !== "progress") return;
           setCloneProgress((previous) =>
-            previous?.phase === event.phase && previous.percent === event.percent
+            previous?.phase === event.phase &&
+            previous.percent === event.percent &&
+            previous.detail === event.detail
               ? previous
               : event,
           );
@@ -2669,6 +2671,7 @@ function OpenCommandPaletteDialog(props: {
               className={cn(
                 "h-full rounded-full bg-primary transition-[width] duration-500 ease-out motion-reduce:transition-none",
                 cloneProgress.percent === null && "w-1/3",
+                cloneProgress.phase === "receiving" && "animate-pulse",
               )}
               style={
                 cloneProgress.percent === null ? undefined : { width: `${cloneProgress.percent}%` }

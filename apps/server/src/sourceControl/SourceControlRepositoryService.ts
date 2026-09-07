@@ -248,7 +248,7 @@ export const make = Effect.gen(function* () {
           percent: Math.round(start + ((end - start) * rawPercent) / 100),
           detail: checkoutMatch
             ? `Checking out files: ${rawPercent}%`
-            : `${match?.[1] ?? "Receiving"} objects: ${rawPercent}%`,
+            : line.replace(/^(?:remote:\s*)/i, "").trim(),
         }) ?? Effect.void
       );
     };
