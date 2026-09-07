@@ -30,7 +30,6 @@ import {
   type FilesystemBrowseResult,
   type ProjectId,
   type SourceControlDiscoveryResult,
-  type SourceControlCloneProgressEvent,
   type SourceControlProviderKind,
   type SourceControlRepositoryInfo,
   PRIMARY_LOCAL_ENVIRONMENT_ID,
@@ -591,10 +590,9 @@ function OpenCommandPaletteDialog(props: {
     reportFailure: false,
     reportDefect: false,
   });
-  const cloneRepositoryWithProgress = useAtomCommand(
-    sourceControlEnvironment.cloneRepositoryWithProgress,
-    { reportFailure: false },
-  );
+  const cloneRepository = useAtomCommand(sourceControlEnvironment.cloneRepository, {
+    reportFailure: false,
+  });
   const { environments } = useEnvironments();
   const desktopLocalBootstraps = useDesktopLocalBootstraps();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
@@ -688,10 +686,6 @@ function OpenCommandPaletteDialog(props: {
   );
   const [isPickingProjectFolder, setIsPickingProjectFolder] = useState(false);
   const [addProjectCloneFlow, setAddProjectCloneFlow] = useState<AddProjectCloneFlow | null>(null);
-  const [cloneProgress, setCloneProgress] = useState<Extract<
-    SourceControlCloneProgressEvent,
-    { kind: "progress" }
-  > | null>(null);
   const [isRemoteProjectLookingUp, setIsRemoteProjectLookingUp] = useState(false);
   const [isRemoteProjectCloning, setIsRemoteProjectCloning] = useState(false);
   const projectGroupingSettings = useMemo(
@@ -2070,39 +2064,30 @@ function OpenCommandPaletteDialog(props: {
     }
 
     setIsRemoteProjectCloning(true);
-    setCloneProgress({
-      kind: "progress",
-      phase: "preparing",
-      percent: 0,
-      detail: "Preparing clone…",
-    });
-    const cloneResult = await cloneRepositoryWithProgress({
-      environmentId: addProjectCloneFlow.environmentId,
-      input: {
-        remoteUrl: addProjectCloneFlow.remoteUrl,
-        destinationPath,
-      },
-      onProgress: (event) => {
-        if (event.kind === "progress") {
-          setCloneProgress(event);
+    try {
+      const cloneResult = await cloneRepository({
+        environmentId: addProjectCloneFlow.environmentId,
+        input: {
+          remoteUrl: addProjectCloneFlow.remoteUrl,
+          destinationPath,
+        },
+      });
+      if (cloneResult._tag === "Failure") {
+        if (!isAtomCommandInterrupted(cloneResult)) {
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Clone failed",
+              description: errorMessage(squashAtomCommandFailure(cloneResult)),
+            }),
+          );
         }
-      },
-    });
-    setIsRemoteProjectCloning(false);
-    setCloneProgress(null);
-    if (cloneResult._tag === "Failure") {
-      if (!isAtomCommandInterrupted(cloneResult)) {
-        toastManager.add(
-          stackedThreadToast({
-            type: "error",
-            title: "Clone failed",
-            description: errorMessage(squashAtomCommandFailure(cloneResult)),
-          }),
-        );
+        return;
       }
-      return;
+      await handleAddProject(cloneResult.value.cwd);
+    } finally {
+      setIsRemoteProjectCloning(false);
     }
-    await handleAddProject(cloneResult.value.cwd);
   }
 
   const browseTo = useCallback(
@@ -2626,7 +2611,7 @@ function OpenCommandPaletteDialog(props: {
           </div>
         </div>
       ) : null}
-      {isRemoteProjectCloning && cloneProgress ? (
+      {isRemoteProjectCloning ? (
         <div className="px-4 pb-4 pt-4" role="status" aria-live="polite">
           <div className="flex items-start justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2.5">
@@ -2642,17 +2627,11 @@ function OpenCommandPaletteDialog(props: {
                 </span>
               </span>
             </div>
-            <span className="shrink-0 rounded-full bg-foreground/[0.06] px-2 py-1 font-medium text-muted-foreground text-[11px] tabular-nums">
-              Cloning{cloneProgress.percent === null ? "" : ` ${cloneProgress.percent}%`}
-            </span>
           </div>
           <div className="mt-5 flex items-center gap-2 text-xs">
             <LoaderCircleIcon className="size-3.5 shrink-0 animate-spin text-primary motion-reduce:animate-none" />
             <span className="min-w-0 flex-1 truncate font-medium text-foreground">
-              {cloneProgress.detail}
-            </span>
-            <span className="shrink-0 text-muted-foreground tabular-nums">
-              {cloneProgress.percent === null ? "—" : `${cloneProgress.percent}%`}
+              Cloning repository…
             </span>
           </div>
           <div
@@ -2660,23 +2639,13 @@ function OpenCommandPaletteDialog(props: {
             role="progressbar"
             aria-valuemin={0}
             aria-valuemax={100}
-            aria-valuenow={cloneProgress.percent ?? undefined}
-            aria-valuetext={cloneProgress.detail}
             aria-label="Clone progress"
           >
-            <div
-              className={cn(
-                "h-full rounded-full bg-primary transition-[width] duration-500 ease-out motion-reduce:transition-none",
-                cloneProgress.percent === null && "w-1/3",
-              )}
-              style={
-                cloneProgress.percent === null ? undefined : { width: `${cloneProgress.percent}%` }
-              }
-            />
+            <div className="h-full w-1/3 rounded-full bg-primary motion-safe:animate-[preview-loading-progress_1.8s_ease-in-out_infinite] motion-reduce:animate-none" />
           </div>
           <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-muted-foreground/65">
             <span className="min-w-0 truncate">{remoteProjectContext?.description}</span>
-            <span className="shrink-0">{cloneProgress.phase.replace("_", " ")}</span>
+            <span className="shrink-0">Cloning</span>
           </div>
         </div>
       ) : null}
