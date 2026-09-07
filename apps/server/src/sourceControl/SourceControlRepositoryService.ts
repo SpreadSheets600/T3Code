@@ -88,6 +88,20 @@ function selectRemoteUrl(
   }
 }
 
+function formatCloneProgressDetail(line: string, isCheckout: boolean): string {
+  if (isCheckout) return "Checking out files";
+
+  const detail = line.replace(/^(?:remote:\s*)/i, "").trim();
+  const match =
+    /^(Enumerating|Counting|Compressing|Receiving|Resolving) objects:\s+\d+%(?:\s+\(([^)]+)\))?(?:,\s*(.*))?$/i.exec(
+      detail,
+    );
+  if (!match) return detail;
+
+  const suffix = [match[2], match[3]].filter(Boolean).join(" · ");
+  return `${match[1]} objects${suffix.length > 0 ? ` · ${suffix}` : ""}`;
+}
+
 export const make = Effect.gen(function* () {
   const config = yield* ServerConfig;
   const fileSystem = yield* FileSystem.FileSystem;
@@ -246,9 +260,7 @@ export const make = Effect.gen(function* () {
         progress?.report({
           phase: normalizedPhase,
           percent: Math.round(start + ((end - start) * rawPercent) / 100),
-          detail: checkoutMatch
-            ? `Checking out files: ${rawPercent}%`
-            : line.replace(/^(?:remote:\s*)/i, "").trim(),
+          detail: formatCloneProgressDetail(line, checkoutMatch !== null),
         }) ?? Effect.void
       );
     };
