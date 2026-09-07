@@ -2596,7 +2596,10 @@ function OpenCommandPaletteDialog(props: {
                   type="button"
                   className="flex cursor-pointer items-center"
                   aria-label="Back"
-                  onClick={popView}
+                  disabled={isRemoteProjectCloning}
+                  onClick={() => {
+                    if (!isRemoteProjectCloning) popView();
+                  }}
                 >
                   <ArrowLeftIcon />
                 </button>
@@ -2650,7 +2653,7 @@ function OpenCommandPaletteDialog(props: {
             </div>
           </div>
           <div className="mt-5 flex items-center gap-2 text-xs">
-            <LoaderCircleIcon className="size-3.5 shrink-0 animate-spin text-primary motion-reduce:animate-none" />
+            <LoaderCircleIcon className="size-3.5 shrink-0 text-primary" />
             <span className="min-w-0 flex-1 truncate font-medium text-foreground">
               {cloneProgress.detail}
             </span>
@@ -2671,7 +2674,6 @@ function OpenCommandPaletteDialog(props: {
               className={cn(
                 "h-full rounded-full bg-primary transition-[width] duration-500 ease-out motion-reduce:transition-none",
                 cloneProgress.percent === null && "w-1/3",
-                cloneProgress.phase === "receiving" && "animate-pulse",
               )}
               style={
                 cloneProgress.percent === null ? undefined : { width: `${cloneProgress.percent}%` }

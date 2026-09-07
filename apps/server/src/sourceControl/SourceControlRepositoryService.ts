@@ -229,13 +229,13 @@ export const make = Effect.gen(function* () {
 
     const reportGitProgress = (line: string) => {
       const match =
-        /(?:remote:\s*)?(Enumerating|Counting|Compressing|Receiving|Resolving) objects:\s+(\d+)%/i.exec(
+        /(?:remote:\s*)?(?:(Enumerating|Counting|Compressing|Receiving) objects:\s+(\d+)%|Resolving deltas:\s+(\d+)%)/i.exec(
           line,
         );
-      const checkoutMatch = /Checking out files:\s+(\d+)%/i.exec(line);
+      const checkoutMatch = /(?:Checking out files|Updating files):\s+(\d+)%/i.exec(line);
       if (!match && !checkoutMatch) return Effect.void;
-      const rawPercent = Number(match?.[2] ?? checkoutMatch?.[1] ?? 0);
-      const rawPhase = match?.[1]?.toLowerCase() ?? "checking_out";
+      const rawPercent = Number(match?.[2] ?? match?.[3] ?? checkoutMatch?.[1] ?? 0);
+      const rawPhase = match?.[1]?.toLowerCase() ?? (match ? "resolving" : "checking_out");
       const phase = rawPhase;
       const phaseByName: Record<string, SourceControlCloneProgressPhase> = {
         enumerating: "counting",

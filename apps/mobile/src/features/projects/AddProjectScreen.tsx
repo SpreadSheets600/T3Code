@@ -961,10 +961,16 @@ export function AddProjectDestinationScreen(props: {
         if (event.kind === "progress") setCloneProgress(event);
       },
     });
-    setCloneProgress(null);
     if (AsyncResult.isFailure(cloneResult)) {
+      setCloneProgress(null);
       setError(errorMessage(Cause.squash(cloneResult.cause)));
     } else {
+      setCloneProgress({
+        kind: "progress",
+        phase: "complete",
+        percent: 100,
+        detail: "Adding project…",
+      });
       const createResult = await createProject(cloneResult.value.cwd);
       if (createResult && AsyncResult.isFailure(createResult)) {
         setError(errorMessage(Cause.squash(createResult.cause)));
@@ -1004,7 +1010,9 @@ export function AddProjectDestinationScreen(props: {
           }
         >
           <View className="mb-2 flex-row items-center justify-between">
-            <Text className="font-t3-medium text-sm text-foreground">Cloning project</Text>
+            <Text className="font-t3-medium text-sm text-foreground">
+              {cloneProgress.phase === "complete" ? "Adding project" : "Cloning project"}
+            </Text>
             <Text className="text-xs text-foreground-muted">
               {cloneProgress.percent === null ? "" : `${cloneProgress.percent}%`}
             </Text>

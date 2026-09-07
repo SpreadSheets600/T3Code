@@ -72,7 +72,12 @@ export function createSourceControlEnvironmentAtoms<R, E>(
                 if (event.kind === "finished") {
                   result = event.result;
                 }
-                input.onProgress?.(event);
+                try {
+                  input.onProgress?.(event);
+                } catch {
+                  // Progress callbacks are presentation-only and must not abort cloning.
+                  return;
+                }
               }),
             ),
           );
