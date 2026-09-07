@@ -24,6 +24,7 @@ import { expandHomePathWith } from "../pathExpansion.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as SourceControlProviderRegistry from "./SourceControlProviderRegistry.ts";
 const isSourceControlRepositoryError = Schema.is(SourceControlRepositoryError);
+const CLONE_TIMEOUT_MS = 10 * 60_000;
 
 export class SourceControlRepositoryService extends Context.Service<
   SourceControlRepositoryService,
@@ -256,7 +257,7 @@ export const make = Effect.gen(function* () {
       operation: "SourceControlRepositoryService.cloneRepository",
       cwd: preparedDestination.parentPath,
       args: ["clone", "--progress", remoteUrl, preparedDestination.directoryName],
-      timeoutMs: 120_000,
+      timeoutMs: CLONE_TIMEOUT_MS,
       maxOutputBytes: 256 * 1024,
       progress: {
         onStderrLine: reportGitProgress,
