@@ -225,6 +225,7 @@ import { UsagePricing, UsageReadError, UsageSummary, UsageSummaryInput } from ".
 import { ServerSettings, ServerSettingsError, ServerSettingsPatch } from "./settings.ts";
 import {
   SourceControlCloneRepositoryInput,
+  SourceControlCloneProgressEvent,
   SourceControlCloneRepositoryResult,
   SourceControlDiscoveryResult,
   SourceControlPublishRepositoryInput,
@@ -366,6 +367,7 @@ export const WS_METHODS = {
   // Source control methods
   sourceControlLookupRepository: "sourceControl.lookupRepository",
   sourceControlCloneRepository: "sourceControl.cloneRepository",
+  sourceControlCloneRepositoryWithProgress: "sourceControl.cloneRepositoryWithProgress",
   sourceControlPublishRepository: "sourceControl.publishRepository",
 
   // Streaming subscriptions
@@ -774,6 +776,16 @@ const WsSourceControlCloneRepositoryRpc = Rpc.make(WS_METHODS.sourceControlClone
   success: SourceControlCloneRepositoryResult,
   error: Schema.Union([SourceControlRepositoryError, EnvironmentAuthorizationError]),
 });
+
+const WsSourceControlCloneRepositoryWithProgressRpc = Rpc.make(
+  WS_METHODS.sourceControlCloneRepositoryWithProgress,
+  {
+    payload: SourceControlCloneRepositoryInput,
+    success: SourceControlCloneProgressEvent,
+    error: Schema.Union([SourceControlRepositoryError, EnvironmentAuthorizationError]),
+    stream: true,
+  },
+);
 
 const WsSourceControlPublishRepositoryRpc = Rpc.make(WS_METHODS.sourceControlPublishRepository, {
   payload: SourceControlPublishRepositoryInput,
@@ -1241,6 +1253,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsPullRequestsSetLabelsRpc,
   WsSourceControlLookupRepositoryRpc,
   WsSourceControlCloneRepositoryRpc,
+  WsSourceControlCloneRepositoryWithProgressRpc,
   WsSourceControlPublishRepositoryRpc,
   WsProjectsListEntriesRpc,
   WsProjectsReadFileRpc,

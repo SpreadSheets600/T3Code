@@ -9,6 +9,7 @@ import {
   SourceControlRepositoryError,
   type SourceControlCloneRepositoryInput,
   type SourceControlCloneRepositoryResult,
+  type SourceControlCloneProgressPhase,
   type SourceControlCloneProtocol,
   type SourceControlProviderKind,
   type SourceControlPublishRepositoryInput,
@@ -32,12 +33,21 @@ export class SourceControlRepositoryService extends Context.Service<
     ) => Effect.Effect<SourceControlRepositoryInfo, SourceControlRepositoryError>;
     readonly cloneRepository: (
       input: SourceControlCloneRepositoryInput,
+      progress?: CloneRepositoryProgress,
     ) => Effect.Effect<SourceControlCloneRepositoryResult, SourceControlRepositoryError>;
     readonly publishRepository: (
       input: SourceControlPublishRepositoryInput,
     ) => Effect.Effect<SourceControlPublishRepositoryResult, SourceControlRepositoryError>;
   }
 >()("t3/sourceControl/SourceControlRepositoryService") {}
+
+export interface CloneRepositoryProgress {
+  readonly report: (input: {
+    readonly phase: SourceControlCloneProgressPhase;
+    readonly percent: number | null;
+    readonly detail: string;
+  }) => Effect.Effect<void>;
+}
 
 function mapRepositoryError(operation: string, provider: SourceControlProviderKind) {
   return Effect.mapError((cause: unknown) =>
@@ -169,6 +179,7 @@ export const make = Effect.gen(function* () {
 
   const cloneRepository = Effect.fn("SourceControlRepositoryService.cloneRepository")(function* (
     input: SourceControlCloneRepositoryInput,
+    progress?: CloneRepositoryProgress,
   ) {
     const preparedDestination = yield* prepareDestination(input.destinationPath);
     let repository: SourceControlRepositoryInfo | null = null;
@@ -193,13 +204,72 @@ export const make = Effect.gen(function* () {
       });
     }
 
+    yield* (
+      progress?.report({
+        phase: "preparing",
+        percent: 0,
+        detail: "Preparing clone…",
+      }) ?? Effect.void
+    );
+
+    const reportGitProgress = (line: string) => {
+      const match =
+        /(?:remote:\s*)?(Enumerating|Counting|Compressing|Receiving|Resolving) objects:\s+(\d+)%/i.exec(
+          line,
+        );
+      const checkoutMatch = /Checking out files:\s+(\d+)%/i.exec(line);
+      if (!match && !checkoutMatch) return Effect.void;
+      const rawPercent = Number(match?.[2] ?? checkoutMatch?.[1] ?? 0);
+      const rawPhase = match?.[1]?.toLowerCase() ?? "checking_out";
+      const phase = rawPhase;
+      const phaseByName: Record<string, SourceControlCloneProgressPhase> = {
+        enumerating: "counting",
+        counting: "counting",
+        compressing: "compressing",
+        receiving: "receiving",
+        resolving: "resolving",
+        checking_out: "checking_out",
+      };
+      const normalizedPhase = phaseByName[phase] ?? "receiving";
+      const progressRanges: Record<SourceControlCloneProgressPhase, readonly [number, number]> = {
+        preparing: [0, 0],
+        counting: [0, 15],
+        compressing: [15, 30],
+        receiving: [30, 85],
+        resolving: [85, 92],
+        checking_out: [92, 100],
+        complete: [100, 100],
+      };
+      const [start, end] = progressRanges[normalizedPhase];
+      return (
+        progress?.report({
+          phase: normalizedPhase,
+          percent: Math.round(start + ((end - start) * rawPercent) / 100),
+          detail: checkoutMatch
+            ? `Checking out files: ${rawPercent}%`
+            : `${match?.[1] ?? "Receiving"} objects: ${rawPercent}%`,
+        }) ?? Effect.void
+      );
+    };
+
     yield* git.execute({
       operation: "SourceControlRepositoryService.cloneRepository",
       cwd: preparedDestination.parentPath,
-      args: ["clone", remoteUrl, preparedDestination.directoryName],
+      args: ["clone", "--progress", remoteUrl, preparedDestination.directoryName],
       timeoutMs: 120_000,
       maxOutputBytes: 256 * 1024,
+      progress: {
+        onStderrLine: reportGitProgress,
+      },
     });
+
+    yield* (
+      progress?.report({
+        phase: "complete",
+        percent: 100,
+        detail: "Clone complete",
+      }) ?? Effect.void
+    );
 
     return {
       cwd: preparedDestination.destinationPath,
@@ -268,8 +338,8 @@ export const make = Effect.gen(function* () {
   return SourceControlRepositoryService.of({
     lookupRepository: (input) =>
       lookupRepository(input).pipe(mapRepositoryError("lookupRepository", input.provider)),
-    cloneRepository: (input) =>
-      cloneRepository(input).pipe(
+    cloneRepository: (input, progress) =>
+      cloneRepository(input, progress).pipe(
         mapRepositoryError("cloneRepository", input.provider ?? "unknown"),
       ),
     publishRepository: (input) =>

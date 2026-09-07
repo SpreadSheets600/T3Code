@@ -30,6 +30,7 @@ import {
   type FilesystemBrowseResult,
   type ProjectId,
   type SourceControlDiscoveryResult,
+  type SourceControlCloneProgressEvent,
   type SourceControlProviderKind,
   type SourceControlRepositoryInfo,
   PRIMARY_LOCAL_ENVIRONMENT_ID,
@@ -589,9 +590,10 @@ function OpenCommandPaletteDialog(props: {
     reportFailure: false,
     reportDefect: false,
   });
-  const cloneRepository = useAtomCommand(sourceControlEnvironment.cloneRepository, {
-    reportFailure: false,
-  });
+  const cloneRepositoryWithProgress = useAtomCommand(
+    sourceControlEnvironment.cloneRepositoryWithProgress,
+    { reportFailure: false },
+  );
   const { environments } = useEnvironments();
   const desktopLocalBootstraps = useDesktopLocalBootstraps();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
@@ -685,6 +687,10 @@ function OpenCommandPaletteDialog(props: {
   );
   const [isPickingProjectFolder, setIsPickingProjectFolder] = useState(false);
   const [addProjectCloneFlow, setAddProjectCloneFlow] = useState<AddProjectCloneFlow | null>(null);
+  const [cloneProgress, setCloneProgress] = useState<Extract<
+    SourceControlCloneProgressEvent,
+    { kind: "progress" }
+  > | null>(null);
   const [isRemoteProjectLookingUp, setIsRemoteProjectLookingUp] = useState(false);
   const [isRemoteProjectCloning, setIsRemoteProjectCloning] = useState(false);
   const projectGroupingSettings = useMemo(
@@ -2063,14 +2069,26 @@ function OpenCommandPaletteDialog(props: {
     }
 
     setIsRemoteProjectCloning(true);
-    const cloneResult = await cloneRepository({
+    setCloneProgress({
+      kind: "progress",
+      phase: "preparing",
+      percent: 0,
+      detail: "Preparing clone…",
+    });
+    const cloneResult = await cloneRepositoryWithProgress({
       environmentId: addProjectCloneFlow.environmentId,
       input: {
         remoteUrl: addProjectCloneFlow.remoteUrl,
         destinationPath,
       },
+      onProgress: (event) => {
+        if (event.kind === "progress") {
+          setCloneProgress(event);
+        }
+      },
     });
     setIsRemoteProjectCloning(false);
+    setCloneProgress(null);
     if (cloneResult._tag === "Failure") {
       if (!isAtomCommandInterrupted(cloneResult)) {
         toastManager.add(
@@ -2544,8 +2562,8 @@ function OpenCommandPaletteDialog(props: {
       key={`${viewStack.length}-${browseGeneration}-${isBrowsing}-${addProjectCloneFlow?.step ?? "none"}`}
       aria-label="Command palette"
       autoHighlight={isBrowsing || isRemoteProjectCloneFlow ? false : "always"}
-      footerActionLabel={footerActionLabel}
-      footerTrailing={footerTrailing}
+      footerActionLabel={isRemoteProjectCloning ? undefined : footerActionLabel}
+      footerTrailing={isRemoteProjectCloning ? undefined : footerTrailing}
       inputAccessory={inputAccessory}
       inputProps={{
         // The submit button is absolutely positioned over the field, so the
@@ -2559,7 +2577,6 @@ function OpenCommandPaletteDialog(props: {
                   hasHighlightedBrowseItem,
                 })
               : undefined,
-        placeholder: inputPlaceholder,
         wrapperClassName: isSubmenu
           ? "[&_[data-slot=autocomplete-start-addon]]:pointer-events-auto"
           : undefined,
@@ -2580,6 +2597,8 @@ function OpenCommandPaletteDialog(props: {
             ? { startAddon: <FolderPlusIcon /> }
             : {}),
         onKeyDown: handleKeyDown,
+        disabled: isRemoteProjectCloning,
+        placeholder: isRemoteProjectCloning ? "Cloning project…" : inputPlaceholder,
       }}
       mode="none"
       onItemHighlighted={(value) => {
@@ -2604,31 +2623,67 @@ function OpenCommandPaletteDialog(props: {
           </div>
         </div>
       ) : null}
-      <CommandPaletteResults
-        groups={displayedGroups}
-        highlightedItemValue={highlightedItemValue}
-        isActionsOnly={isActionsOnly}
-        keybindings={keybindings}
-        onExecuteItem={executeItem}
-        {...(addProjectCloneFlow?.step === "repository"
-          ? {
-              emptyStateMessage:
-                addProjectCloneFlow.source === "url"
-                  ? "Enter a Git clone URL and press Enter to continue."
-                  : "Enter a repository path and press Enter to look it up.",
-            }
-          : addProjectCloneFlow?.step === "confirm"
-            ? { emptyStateMessage: "Choose a destination path and press Enter to clone." }
-            : relativePathNeedsActiveProject
-              ? { emptyStateMessage: "Relative paths require an active project." }
-              : willCreateProjectPath
-                ? {
-                    emptyStateMessage: "Press Enter to create this folder and add it as a project.",
-                  }
-                : threadSearch.isPending
-                  ? { emptyStateMessage: "Searching thread messages…" }
-                  : {})}
-      />
+      {isRemoteProjectCloning && cloneProgress ? (
+        <div
+          className="mx-2 mt-2 mb-1 rounded-md border border-border/60 bg-muted/20 px-3 py-3"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <span className="font-medium text-foreground text-sm">Cloning project</span>
+            <span className="text-muted-foreground text-xs tabular-nums">
+              {cloneProgress.percent === null ? "" : `${cloneProgress.percent}%`}
+            </span>
+          </div>
+          <div className="mb-2 text-muted-foreground text-xs">{cloneProgress.detail}</div>
+          <div
+            className="h-1.5 w-full overflow-hidden rounded-full bg-muted/60"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={cloneProgress.percent ?? undefined}
+            aria-label="Clone progress"
+          >
+            <div
+              className={cn(
+                "h-full rounded-full bg-primary transition-[width] duration-500 ease-out motion-reduce:transition-none",
+                cloneProgress.percent === null && "w-1/3",
+              )}
+              style={
+                cloneProgress.percent === null ? undefined : { width: `${cloneProgress.percent}%` }
+              }
+            />
+          </div>
+        </div>
+      ) : null}
+      {!isRemoteProjectCloning ? (
+        <CommandPaletteResults
+          groups={displayedGroups}
+          highlightedItemValue={highlightedItemValue}
+          isActionsOnly={isActionsOnly}
+          keybindings={keybindings}
+          onExecuteItem={executeItem}
+          {...(addProjectCloneFlow?.step === "repository"
+            ? {
+                emptyStateMessage:
+                  addProjectCloneFlow.source === "url"
+                    ? "Enter a Git clone URL and press Enter to continue."
+                    : "Enter a repository path and press Enter to look it up.",
+              }
+            : addProjectCloneFlow?.step === "confirm"
+              ? { emptyStateMessage: "Choose a destination path and press Enter to clone." }
+              : relativePathNeedsActiveProject
+                ? { emptyStateMessage: "Relative paths require an active project." }
+                : willCreateProjectPath
+                  ? {
+                      emptyStateMessage:
+                        "Press Enter to create this folder and add it as a project.",
+                    }
+                  : threadSearch.isPending
+                    ? { emptyStateMessage: "Searching thread messages…" }
+                    : {})}
+        />
+      ) : null}
     </CommandPaletteContent>
   );
 }

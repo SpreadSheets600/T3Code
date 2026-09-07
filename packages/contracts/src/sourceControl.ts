@@ -84,6 +84,35 @@ export const SourceControlCloneRepositoryResult = Schema.Struct({
 });
 export type SourceControlCloneRepositoryResult = typeof SourceControlCloneRepositoryResult.Type;
 
+export const SourceControlCloneProgressPhase = Schema.Literals([
+  "preparing",
+  "counting",
+  "compressing",
+  "receiving",
+  "resolving",
+  "checking_out",
+  "complete",
+]);
+export type SourceControlCloneProgressPhase = typeof SourceControlCloneProgressPhase.Type;
+
+const SourceControlCloneProgressBase = Schema.Struct({
+  phase: SourceControlCloneProgressPhase,
+  percent: Schema.NullOr(Schema.Number),
+  detail: TrimmedNonEmptyString,
+});
+
+export const SourceControlCloneProgressEvent = Schema.Union([
+  Schema.Struct({
+    ...SourceControlCloneProgressBase.fields,
+    kind: Schema.Literal("progress"),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("finished"),
+    result: SourceControlCloneRepositoryResult,
+  }),
+]);
+export type SourceControlCloneProgressEvent = typeof SourceControlCloneProgressEvent.Type;
+
 export const SourceControlPublishRepositoryInput = Schema.Struct({
   cwd: TrimmedNonEmptyString,
   provider: SourceControlProviderKind,

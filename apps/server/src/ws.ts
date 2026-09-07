@@ -32,6 +32,8 @@ import {
   type OrchestrationClientOrigin,
   type OrchestrationCommand,
   type GitActionProgressEvent,
+  type SourceControlCloneProgressEvent,
+  SourceControlRepositoryError,
   type GitManagerServiceError,
   OrchestrationDispatchCommandError,
   type OrchestrationEvent,
@@ -2238,6 +2240,29 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             WS_METHODS.sourceControlCloneRepository,
             sourceControlRepositories.cloneRepository(input),
+            {
+              "rpc.aggregate": "source-control",
+            },
+          ),
+        [WS_METHODS.sourceControlCloneRepositoryWithProgress]: (input) =>
+          observeRpcStream(
+            WS_METHODS.sourceControlCloneRepositoryWithProgress,
+            Stream.callback<SourceControlCloneProgressEvent, SourceControlRepositoryError>(
+              (queue) =>
+                sourceControlRepositories
+                  .cloneRepository(input, {
+                    report: (progress) =>
+                      Queue.offer(queue, { kind: "progress", ...progress }).pipe(Effect.asVoid),
+                  })
+                  .pipe(
+                    Effect.flatMap((result) =>
+                      Queue.offer(queue, { kind: "finished", result }).pipe(
+                        Effect.andThen(Queue.end(queue).pipe(Effect.asVoid)),
+                      ),
+                    ),
+                    Effect.catchCause((cause) => Queue.failCause(queue, cause)),
+                  ),
+            ),
             {
               "rpc.aggregate": "source-control",
             },

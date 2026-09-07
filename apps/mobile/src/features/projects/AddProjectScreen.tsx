@@ -36,6 +36,7 @@ import {
   type EnvironmentId,
   type EnvironmentMachineKind,
   ProjectId,
+  type SourceControlCloneProgressEvent,
   resolveEnvironmentMachineKind,
 } from "@t3tools/contracts";
 import { CommonActions, StackActions, useNavigation } from "@react-navigation/native";
@@ -904,9 +905,12 @@ export function AddProjectDestinationScreen(props: {
   readonly repositoryTitle?: string | string[];
   readonly repositoryName?: string | string[];
 }) {
-  const cloneRepository = useAtomCommand(sourceControlEnvironment.cloneRepository, {
-    reportFailure: false,
-  });
+  const cloneRepositoryWithProgress = useAtomCommand(
+    sourceControlEnvironment.cloneRepositoryWithProgress,
+    {
+      reportFailure: false,
+    },
+  );
   const environment = useEnvironmentFromParam(props.environmentId);
   const createProject = useCreateProject(environment);
   const remoteUrl = stringParam(props.remoteUrl);
@@ -922,6 +926,10 @@ export function AddProjectDestinationScreen(props: {
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cloneProgress, setCloneProgress] = useState<Extract<
+    SourceControlCloneProgressEvent,
+    { kind: "progress" }
+  > | null>(null);
 
   const submitPath = useCallback(async () => {
     if (!environment || !remoteUrl || isBrowseNavigating || isSubmitting) return;
@@ -937,13 +945,23 @@ export function AddProjectDestinationScreen(props: {
     }
 
     setIsSubmitting(true);
-    const cloneResult = await cloneRepository({
+    setCloneProgress({
+      kind: "progress",
+      phase: "preparing",
+      percent: 0,
+      detail: "Preparing clone…",
+    });
+    const cloneResult = await cloneRepositoryWithProgress({
       environmentId: environment.environmentId,
       input: {
         remoteUrl,
         destinationPath: resolved.path,
       },
+      onProgress: (event) => {
+        if (event.kind === "progress") setCloneProgress(event);
+      },
     });
+    setCloneProgress(null);
     if (AsyncResult.isFailure(cloneResult)) {
       setError(errorMessage(Cause.squash(cloneResult.cause)));
     } else {
@@ -954,7 +972,7 @@ export function AddProjectDestinationScreen(props: {
     }
     setIsSubmitting(false);
   }, [
-    cloneRepository,
+    cloneRepositoryWithProgress,
     createProject,
     environment,
     isBrowseNavigating,
@@ -974,27 +992,59 @@ export function AddProjectDestinationScreen(props: {
           </Text>
         </View>
       ) : null}
+      {isSubmitting && cloneProgress ? (
+        <View
+          className="mt-2 rounded-[18px] border border-border/60 bg-card px-4 py-3"
+          accessibilityLiveRegion="polite"
+          accessibilityRole="progressbar"
+          accessibilityValue={
+            cloneProgress.percent === null
+              ? undefined
+              : { max: 100, min: 0, now: cloneProgress.percent }
+          }
+        >
+          <View className="mb-2 flex-row items-center justify-between">
+            <Text className="font-t3-medium text-sm text-foreground">Cloning project</Text>
+            <Text className="text-xs text-foreground-muted">
+              {cloneProgress.percent === null ? "" : `${cloneProgress.percent}%`}
+            </Text>
+          </View>
+          <Text className="mb-2 text-xs text-foreground-muted">{cloneProgress.detail}</Text>
+          <View className="h-1.5 overflow-hidden rounded-full bg-muted">
+            <View
+              className="h-full rounded-full bg-accent"
+              style={
+                cloneProgress.percent === null
+                  ? { width: "35%" }
+                  : { width: `${cloneProgress.percent}%` }
+              }
+            />
+          </View>
+        </View>
+      ) : null}
       {environment ? (
-        <>
-          <ProjectPathInput
-            value={pathInput}
-            onChangeText={setPathInput}
-            onSubmit={() => void submitPath()}
-          />
-          <PrimaryActionButton
-            label="Clone project"
-            disabled={isBrowseNavigating || isSubmitting || !remoteUrl}
-            onPress={() => void submitPath()}
-            loading={isSubmitting}
-          />
-          <FolderBrowser
-            environment={environment}
-            navigateToBrowsePath={navigateToBrowsePath}
-            pathInput={pathInput}
-            setPathInput={setPathInput}
-            pinnedDirectoryName={repositoryName}
-          />
-        </>
+        isSubmitting ? null : (
+          <>
+            <ProjectPathInput
+              value={pathInput}
+              onChangeText={setPathInput}
+              onSubmit={() => void submitPath()}
+            />
+            <PrimaryActionButton
+              label="Clone project"
+              disabled={isBrowseNavigating || isSubmitting || !remoteUrl}
+              onPress={() => void submitPath()}
+              loading={isSubmitting}
+            />
+            <FolderBrowser
+              environment={environment}
+              navigateToBrowsePath={navigateToBrowsePath}
+              pathInput={pathInput}
+              setPathInput={setPathInput}
+              pinnedDirectoryName={repositoryName}
+            />
+          </>
+        )
       ) : (
         <EmptyEnvironmentState />
       )}

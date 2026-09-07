@@ -655,14 +655,16 @@ const collectOutput = Effect.fnUntraced(function* (
   let truncated = false;
 
   const emitCompleteLines = Effect.fnUntraced(function* (flush: boolean) {
-    let newlineIndex = lineBuffer.indexOf("\n");
-    while (newlineIndex >= 0) {
-      const line = lineBuffer.slice(0, newlineIndex).replace(/\r$/, "");
-      lineBuffer = lineBuffer.slice(newlineIndex + 1);
+    let delimiterIndex = lineBuffer.search(/[\r\n]/);
+    while (delimiterIndex >= 0) {
+      const delimiter = lineBuffer[delimiterIndex];
+      const delimiterLength = delimiter === "\r" && lineBuffer[delimiterIndex + 1] === "\n" ? 2 : 1;
+      const line = lineBuffer.slice(0, delimiterIndex);
+      lineBuffer = lineBuffer.slice(delimiterIndex + delimiterLength);
       if (line.length > 0 && onLine) {
         yield* onLine(line);
       }
-      newlineIndex = lineBuffer.indexOf("\n");
+      delimiterIndex = lineBuffer.search(/[\r\n]/);
     }
 
     if (flush) {
