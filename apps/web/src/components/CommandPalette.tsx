@@ -2644,7 +2644,7 @@ function OpenCommandPaletteDialog(props: {
                   {remoteProjectContext?.title ?? "Repository"}
                 </span>
                 <span className="truncate text-muted-foreground/75 text-xs">
-                  {query || "Preparing destination"}
+                  {(remoteProjectContext?.description ?? query) || "Preparing destination"}
                 </span>
               </span>
             </div>
